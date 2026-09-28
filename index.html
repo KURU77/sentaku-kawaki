@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>洗濯乾きナビ — 室温と湿度で乾きやすさ判定</title>
+<meta name="description" content="室温と湿度を入れるだけで、洗濯物の乾きやすさと乾くまでの目安時間がわかるアプリ。">
+<meta name="theme-color" content="#f3f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131619" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="乾きナビ">
+<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<style>
+:root{
+  --bg:#f3f6f8; --panel:#ffffff; --panel-2:#eef2f5; --line:#dfe5ea;
+  --text:#1b2127; --muted:#66707c; --accent:#2f7fd8; --accent-soft:#e3effc;
+  --l0:#c8584f; --l1:#e08a3c; --l2:#d9b43a; --l3:#6fb35a; --l4:#2f9e8f;
+  --radius:16px; --shadow:0 1px 2px rgba(16,24,40,.06),0 6px 18px rgba(16,24,40,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#131619; --panel:#1b1f24; --panel-2:#22272d; --line:#2d333b;
+    --text:#e7eaee; --muted:#9aa4b0; --accent:#63a4f0; --accent-soft:#1c2c42;
+    --l0:#d86a61; --l1:#e39a55; --l2:#dcc05a; --l3:#7fc16a; --l4:#45b3a3;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;
+  font-size:16px; line-height:1.6;
+  -webkit-tap-highlight-color:transparent; -webkit-font-smoothing:antialiased;
+}
+.wrap{
+  max-width:640px; margin:0 auto;
+  padding:calc(14px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:20px;margin:0;letter-spacing:.02em}
+header small{color:var(--muted);font-size:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+
+/* 入力 */
+.field + .field{margin-top:18px}
+.field-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.field-head label{font-weight:600}
+.stepper{display:flex;align-items:center;gap:6px;-webkit-user-select:none;user-select:none}
+.stepper button{
+  width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--text);font-size:20px;line-height:1;cursor:pointer;
+}
+.stepper button:active{transform:scale(.95)}
+.num{display:flex;align-items:baseline;gap:2px;min-width:92px;justify-content:center}
+.num input{
+  width:64px;font:inherit;font-size:28px;font-weight:700;text-align:right;border:none;background:transparent;color:var(--text);
+  font-variant-numeric:tabular-nums;padding:0;-moz-appearance:textfield;appearance:textfield;
+}
+.num input::-webkit-outer-spin-button,.num input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.num input:focus{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num span{color:var(--muted);font-size:15px}
+input[type=range]{width:100%;margin:12px 0 0;accent-color:var(--accent);height:28px}
+
+.opts{display:grid;gap:12px;margin-top:4px}
+.opt-label{font-size:13px;color:var(--muted);margin-bottom:6px}
+.seg{display:flex;flex-wrap:wrap;gap:6px;-webkit-user-select:none;user-select:none}
+.seg button{
+  flex:1 1 auto;min-height:38px;padding:6px 10px;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel-2);color:var(--text);font:inherit;font-size:14px;cursor:pointer;
+}
+.seg button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+
+/* 結果 */
+.result{position:relative;overflow:hidden}
+.result::before{content:"";position:absolute;inset:0 0 auto 0;height:6px;background:var(--lv)}
+.res-top{display:flex;align-items:center;gap:16px}
+.gauge{flex:none;width:108px;height:108px;position:relative}
+.gauge svg{width:100%;height:100%;transform:rotate(-90deg)}
+.gauge .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge .val b{font-size:32px;line-height:1;font-variant-numeric:tabular-nums}
+.gauge .val small{font-size:11px;color:var(--muted);margin-top:4px}
+.res-main{min-width:0}
+.level{font-size:22px;font-weight:800;color:var(--lv);line-height:1.3}
+.eta{margin-top:4px;font-size:15px}
+.eta b{white-space:nowrap;font-size:20px;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;margin-top:8px;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600}
+.badge.ok{background:color-mix(in srgb,var(--l4) 18%,transparent);color:var(--l4)}
+.badge.warn{background:color-mix(in srgb,var(--l1) 20%,transparent);color:var(--l1)}
+.badge.bad{background:color-mix(in srgb,var(--l0) 18%,transparent);color:var(--l0)}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.metric{background:var(--panel-2);border-radius:12px;padding:8px 10px}
+.metric small{display:block;color:var(--muted);font-size:11px}
+.metric b{font-size:17px;font-variant-numeric:tabular-nums}
+.metric b span{font-size:12px;font-weight:500;color:var(--muted);margin-left:2px}
+
+/* アイテム別 */
+.items{list-style:none;margin:0;padding:0}
+.items li{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.items li:first-child{border-top:none}
+.items .bar{grid-column:1 / -1;height:6px;border-radius:3px;background:var(--panel-2);overflow:hidden}
+.items .bar i{display:block;height:100%;border-radius:3px}
+.items .t{font-variant-numeric:tabular-nums;font-weight:700}
+.items .t.slow{color:var(--l0)}
+.note{font-size:12px;color:var(--muted);margin:10px 0 0}
+
+/* アドバイス */
+.tips{margin:0;padding-left:1.2em}
+.tips li + li{margin-top:6px}
+
+/* マップ */
+.mapbox{position:relative}
+canvas{display:block;width:100%;height:auto;border-radius:10px;touch-action:none;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.legend .dash{width:18px;height:0;border-top:2px dashed var(--text);border-radius:0}
+
+details summary{cursor:pointer;color:var(--muted);font-size:14px}
+details p{font-size:14px;margin:8px 0 0}
+footer{text-align:center;font-size:12px;color:var(--muted);margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>👕 洗濯乾きナビ</h1>
+    <small>室温と湿度から、乾きやすさと時間の目安を出します</small>
+  </header>
+
+  <section class="card" aria-label="条件の入力">
+    <div class="field">
+      <div class="field-head">
+        <label for="temp">室温</label>
+        <div class="stepper">
+          <button type="button" data-step="temp" data-d="-0.5" aria-label="室温を下げる">−</button>
+          <div class="num"><input id="temp" type="number" inputmode="decimal" step="0.5" min="0" max="40"><span>℃</span></div>
+          <button type="button" data-step="temp" data-d="0.5" aria-label="室温を上げる">＋</button>
+        </div>
+      </div>
+      <input type="range" id="tempR" min="0" max="40" step="0.5" aria-label="室温スライダー">
+    </div>
+    <div class="field">
+      <div class="field-head">
+        <label for="rh">湿度</label>
+        <div class="stepper">
+          <button type="button" data-step="rh" data-d="-1" aria-label="湿度を下げる">−</button>
+          <div class="num"><input id="rh" type="number" inputmode="numeric" step="1" min="10" max="100"><span>%</span></div>
+          <button type="button" data-step="rh" data-d="1" aria-label="湿度を上げる">＋</button>
+        </div>
+      </div>
+      <input type="range" id="rhR" min="10" max="100" step="1" aria-label="湿度スライダー">
+    </div>
+  </section>
+
+  <section class="card result" id="result" aria-live="polite">
+    <div class="res-top">
+      <div class="gauge">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--panel-2)" stroke-width="12"/>
+          <circle id="arc" cx="60" cy="60" r="50" fill="none" stroke="var(--lv)" stroke-width="12" stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16" style="transition:stroke-dashoffset .35s ease"/>
+        </svg>
+        <div class="val"><b id="score">–</b><small>乾きやすさ</small></div>
+      </div>
+      <div class="res-main">
+        <div class="level" id="level">–</div>
+        <div class="eta">Tシャツが乾くまで 約 <b id="eta">–</b></div>
+        <div id="smell"></div>
+      </div>
+    </div>
+    <div class="metrics">
+      <div class="metric"><small>飽差</small><b id="mDef">–<span>g/m³</span></b></div>
+      <div class="metric"><small>絶対湿度</small><b id="mAbs">–<span>g/m³</span></b></div>
+      <div class="metric"><small>露点</small><b id="mDew">–<span>℃</span></b></div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="干し方の条件">
+    <h2>干し方</h2>
+    <div class="opts">
+      <div>
+        <div class="opt-label">場所</div>
+        <div class="seg" data-opt="place">
+          <button type="button" data-v="in">室内</button>
+          <button type="button" data-v="shade">屋外・日陰</button>
+          <button type="button" data-v="sun">屋外・日なた</button>
+        </div>
+      </div>
+      <div>
+        <div class="opt-label">風・家電</div>
+        <div class="seg" data-opt="air">
+          <button type="button" data-v="none">なし</button>
+          <button type="button" data-v="fan">扇風機・サーキュレーター</button>
+          <button type="button" data-v="ac">エアコン除湿</button>
+          <button type="button" data-v="dehum">除湿機</button>
+        </div>
+      </div>
+      <div>
+        <div class="opt-label">量・間隔</div>
+        <div class="seg" data-opt="load">
+          <button type="button" data-v="few">少なめ・間隔広め</button>
+          <button type="button" data-v="mid">ふつう</button>
+          <button type="button" data-v="many">多め・詰めて干す</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="衣類別の目安">
+    <h2>衣類別の目安時間</h2>
+    <ul class="items" id="items"></ul>
+    <p class="note">脱水直後から、ほぼ乾くまでの目安です。生地・脱水時間・干し方で前後します。</p>
+  </section>
+
+  <section class="card" aria-label="アドバイス">
+    <h2>ひとことアドバイス</h2>
+    <ul class="tips" id="tips"></ul>
+  </section>
+
+  <section class="card" aria-label="乾きやすさマップ">
+    <h2>乾きやすさマップ</h2>
+    <div class="mapbox"><canvas id="map" width="600" height="420" aria-label="室温と湿度ごとの乾きやすさを色分けした図。タップするとその条件に切り替わります。"></canvas></div>
+    <div class="legend" id="legend"></div>
+    <p class="note">横軸が湿度、縦軸が室温。タップ（ドラッグ）するとその条件に切り替わります。点線より右下は、今の干し方だとTシャツに5時間以上かかる領域です。</p>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>計算のしくみ</summary>
+      <p>洗濯物から水が蒸発する速さは、空気が<b>あと何グラムの水蒸気を含めるか（飽差）</b>にほぼ比例します。飽差は「その温度で空気が含める最大の水分量 − いま含んでいる水分量」で、室温が高いほど、湿度が低いほど大きくなります。</p>
+      <p>乾きやすさ（0〜100）は飽差 15 g/m³ を 100 としたものです（30℃・湿度50%前後に相当）。60以上なら室内でもTシャツがおよそ5時間以内に乾く目安です。乾燥時間は「脱水後のTシャツ・室内・無風・ふつうの量」で 20℃60% のとき約7時間を基準に、飽差に反比例させ、場所・風・量の係数を掛けています。</p>
+      <p>部屋干しのにおいは、乾くまでに菌（モラクセラ菌など）が増えることで出ます。<b>5時間以内に乾かす</b>のがひとつの目安とされています。</p>
+      <p>あくまで目安です。入力値はこの端末にだけ保存され、外部には送信されません。</p>
+    </details>
+  </section>
+
+  <footer>洗濯乾きナビ · オフラインでも使えます</footer>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var KEY = 'sentaku-kawaki-v1';
+  var LEVELS = [
+    {min:80, name:'とてもよく乾く', c:'--l4'},
+    {min:60, name:'よく乾く',       c:'--l3'},
+    {min:40, name:'ふつうに乾く',   c:'--l2'},
+    {min:20, name:'乾きにくい',     c:'--l1'},
+    {min:0,  name:'ほとんど乾かない', c:'--l0'}
+  ];
+  var ITEMS = [
+    {name:'下着・薄手のシャツ', k:0.6},
+    {name:'Tシャツ',           k:1.0},
+    {name:'フェイスタオル',     k:1.1},
+    {name:'バスタオル',         k:1.8},
+    {name:'パーカー・トレーナー', k:2.1},
+    {name:'ジーンズ',           k:2.5}
+  ];
+  var PLACE = {in:1, shade:0.6, sun:0.35};
+  var AIR   = {none:1, fan:0.55, ac:0.65, dehum:0.45};
+  var LOAD  = {few:0.85, mid:1, many:1.3};
+  var BASE_K = 48;      // Tシャツ・室内・無風・ふつうで 20℃60% ≒ 7時間
+  var FULL_DEF = 15;    // この飽差で乾きやすさ100
+  var MAX_H = 48;
+
+  var state = {t:22, rh:60, place:'in', air:'none', load:'mid'};
+  try{
+    var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if(saved && typeof saved === 'object'){
+      for(var k in state){ if(saved[k] !== undefined) state[k] = saved[k]; }
+    }
+  }catch(e){}
+  if(!(state.place in PLACE)) state.place = 'in';
+  if(!(state.air in AIR)) state.air = 'none';
+  if(!(state.load in LOAD)) state.load = 'mid';
+
+  // --- 物理量 ---
+  function satVP(t){ return 6.1078 * Math.pow(10, 7.5*t/(t+237.3)); }           // hPa
+  function absHum(t, rh){ return 216.7 * satVP(t)*rh/100 / (t+273.15); }        // g/m³
+  function deficit(t, rh){ return 216.7 * satVP(t)*(1-rh/100) / (t+273.15); }
+  function dewPoint(t, rh){
+    var g = Math.log(Math.max(rh,1)/100) + 7.5*Math.LN10*t/(t+237.3);
+    return 237.3*g/(7.5*Math.LN10 - g);
+  }
+  function scoreOf(def){ return Math.max(0, Math.min(100, Math.round(def/FULL_DEF*100))); }
+  function factor(){ return PLACE[state.place] * AIR[state.air] * LOAD[state.load]; }
+  function hoursFor(def, k, f){ return BASE_K * k * f / Math.max(def, 0.05); }
+  function levelOf(s){ for(var i=0;i<LEVELS.length;i++) if(s >= LEVELS[i].min) return LEVELS[i]; return LEVELS[LEVELS.length-1]; }
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function fmtH(h){
+    if(h >= MAX_H) return '48時間以上';
+    if(h < 1) return Math.max(10, Math.round(h*6)*10) + '分';
+    var hh = Math.floor(h), mm = Math.round((h-hh)*60/10)*10;
+    if(mm === 60){ hh++; mm = 0; }
+    return hh + '時間' + (mm ? mm + '分' : '');
+  }
+  function round1(x){ return (Math.round(x*10)/10).toFixed(1); }
+
+  // --- 入力 ---
+  var $ = function(id){ return document.getElementById(id); };
+  var inputs = {
+    t:  {num:$('temp'), range:$('tempR'), min:0,  max:40,  step:0.5},
+    rh: {num:$('rh'),   range:$('rhR'),   min:10, max:100, step:1}
+  };
+  function clamp(key, v){
+    var c = inputs[key];
+    v = Math.round(v / c.step) * c.step;
+    return Math.max(c.min, Math.min(c.max, v));
+  }
+  function setVal(key, v, fromNum){
+    if(!isFinite(v)) return;
+    state[key] = clamp(key, v);
+    if(!fromNum) inputs[key].num.value = state[key];
+    inputs[key].range.value = state[key];
+    update();
+  }
+  Object.keys(inputs).forEach(function(key){
+    var c = inputs[key];
+    c.num.value = state[key]; c.range.value = state[key];
+    c.range.addEventListener('input', function(){ setVal(key, parseFloat(c.range.value)); });
+    c.num.addEventListener('input', function(){
+      var v = parseFloat(c.num.value);
+      if(isFinite(v) && v >= c.min && v <= c.max) setVal(key, v, true);
+    });
+    c.num.addEventListener('change', function(){ setVal(key, parseFloat(c.num.value) || state[key]); });
+  });
+  document.querySelectorAll('[data-step]').forEach(function(b){
+    var key = b.dataset.step === 'temp' ? 't' : 'rh', d = parseFloat(b.dataset.d), timer = null;
+    function tick(){ setVal(key, state[key] + d); }
+    function stop(){ clearTimeout(timer); clearInterval(timer); timer = null; }
+    b.addEventListener('pointerdown', function(e){
+      e.preventDefault(); tick();
+      timer = setTimeout(function(){ timer = setInterval(tick, 70); }, 380);
+    });
+    ['pointerup','pointerleave','pointercancel'].forEach(function(ev){ b.addEventListener(ev, stop); });
+    b.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); tick(); } });
+  });
+  document.querySelectorAll('.seg[data-opt]').forEach(function(seg){
+    var opt = seg.dataset.opt;
+    seg.addEventListener('click', function(e){
+      var b = e.target.closest('button'); if(!b) return;
+      state[opt] = b.dataset.v; update();
+    });
+  });
+
+  // --- 表示 ---
+  function update(){
+    var t = state.t, rh = state.rh, f = factor();
+    var def = deficit(t, rh), s = scoreOf(def), lv = levelOf(s);
+    var col = cssVar(lv.c);
+    var res = $('result');
+    res.style.setProperty('--lv', col);
+    $('score').textContent = s;
+    $('arc').style.strokeDashoffset = (314.16 * (1 - s/100)).toFixed(1);
+    $('level').textContent = lv.name;
+    var h = hoursFor(def, 1, f);
+    $('eta').textContent = fmtH(h);
+    var smell = $('smell');
+    if(state.place !== 'in'){ smell.innerHTML = ''; }
+    else if(h <= 5) smell.innerHTML = '<span class="badge ok">部屋干し臭の心配は少なめ</span>';
+    else if(h <= 8) smell.innerHTML = '<span class="badge warn">5時間超え：においに注意</span>';
+    else smell.innerHTML = '<span class="badge bad">においが出やすい条件です</span>';
+
+    $('mDef').firstChild.nodeValue = round1(def);
+    $('mAbs').firstChild.nodeValue = round1(absHum(t, rh));
+    $('mDew').firstChild.nodeValue = round1(dewPoint(t, rh));
+
+    // 衣類別
+    var maxShow = 24;
+    $('items').innerHTML = ITEMS.map(function(it){
+      var hh = hoursFor(def, it.k, f);
+      var w = Math.min(100, hh/maxShow*100);
+      var c = hh <= 5 ? cssVar('--l4') : hh <= 8 ? cssVar('--l2') : hh <= 16 ? cssVar('--l1') : cssVar('--l0');
+      return '<li><span>' + it.name + '</span><span class="t' + (hh > 16 ? ' slow' : '') + '">' + fmtH(hh) + '</span>' +
+        '<span class="bar"><i style="width:' + w.toFixed(1) + '%;background:' + c + '"></i></span></li>';
+    }).join('');
+
+    // 選択状態
+    document.querySelectorAll('.seg[data-opt]').forEach(function(seg){
+      var v = state[seg.dataset.opt];
+      seg.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.v === v)); });
+    });
+
+    renderTips(t, rh, def, h, f);
+    drawMap();
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+  }
+
+  // 5時間で乾くのに必要な湿度（今の室温・干し方で）
+  function rhFor(hours, t, f){
+    var needDef = BASE_K * f / hours;
+    var maxDef = deficit(t, 0);
+    if(needDef > maxDef) return null;
+    return Math.floor((1 - needDef/maxDef) * 100);
+  }
+  function renderTips(t, rh, def, h, f){
+    var tips = [];
+    var inside = state.place === 'in';
+    if(h <= 3) tips.push('絶好の洗濯日和です。厚手のものもこのタイミングでどうぞ。');
+    else if(h <= 5) tips.push('ふつうに干して大丈夫。厚手のものは間隔を広めにとると安心です。');
+
+    if(h > 5){
+      var need = rhFor(5, t, f);
+      if(need !== null && need < rh) tips.push('今の室温なら、湿度を <b>' + need + '%</b> くらいまで下げるとTシャツが5時間以内に乾きます。');
+      if(state.air === 'none'){
+        var hf = hoursFor(def, 1, PLACE[state.place]*AIR.fan*LOAD[state.load]);
+        var hd = hoursFor(def, 1, PLACE[state.place]*AIR.dehum*LOAD[state.load]);
+        tips.push('扇風機・サーキュレーターを当てると約 <b>' + fmtH(hf) + '</b>、除湿機なら約 <b>' + fmtH(hd) + '</b> に短縮できる見込みです。');
+      }
+      if(state.load !== 'few') tips.push('こぶし1つ分ずつ間隔をあけ、長いもの→短いものの順に外側から並べる「アーチ干し」で空気の通り道をつくりましょう。');
+      if(inside) tips.push('部屋干しは部屋の中央か、エアコンの風が通る場所へ。カーテンレールや壁際は乾きにくくなります。');
+    }
+    if(rh >= 85) tips.push('湿度がかなり高めです。' + (inside ? '窓を閉めて除湿機かエアコン除湿を使うのが近道です。' : '雨や夜露に注意。取り込みは早めに。'));
+    if(t < 10) tips.push('気温が低く、空気が水分を含みにくい状態です。' + (inside ? '暖房の効いた部屋に移すと大きく改善します。' : '日が当たる時間帯に干しましょう。'));
+    if(t >= 30 && rh <= 50 && state.place === 'sun') tips.push('日差しが強いときは、色あせ防止に裏返して干すのがおすすめです。');
+    if(dewPoint(t, rh) > t - 2) tips.push('露点が室温に近く、窓や壁に結露しやすい状態です。換気も意識しましょう。');
+    $('tips').innerHTML = tips.map(function(s){ return '<li>' + s + '</li>'; }).join('');
+  }
+
+  // --- マップ ---
+  var cv = $('map'), ctx = cv.getContext('2d');
+  var M = {l:44, r:12, t:12, b:34}, T0 = 0, T1 = 40, R0 = 10, R1 = 100;
+  function mapGeom(){
+    var W = cv.width, H = cv.height;
+    return {W:W, H:H, pw:W-M.l-M.r, ph:H-M.t-M.b};
+  }
+  function sizeCanvas(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = cv.clientWidth || 600;
+    var h = Math.round(w * 0.68);
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+  function drawMap(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var g = mapGeom(), pw = g.pw/dpr, ph = g.ph/dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    var W = g.W/dpr, H = g.H/dpr;
+    ctx.clearRect(0,0,W,H);
+    var cols = LEVELS.map(function(l){ return cssVar(l.c); });
+    var nx = 90, ny = 80, cw = pw/nx, ch = ph/ny;
+    for(var i=0;i<nx;i++){
+      var rh = R0 + (i+0.5)/nx*(R1-R0);
+      for(var j=0;j<ny;j++){
+        var t = T1 - (j+0.5)/ny*(T1-T0);
+        var s = scoreOf(deficit(t, rh));
+        var idx = 0; while(idx < LEVELS.length-1 && s < LEVELS[idx].min) idx++;
+        ctx.fillStyle = cols[idx];
+        ctx.fillRect(M.l + i*cw, M.t + j*ch, cw+0.6, ch+0.6);
+      }
+    }
+    var text = cssVar('--text'), muted = cssVar('--muted');
+    // 5時間ライン（Tシャツ）
+    var f = factor();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(M.l, M.t, pw, ph); ctx.clip();
+    ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.setLineDash([6,5]);
+    ctx.beginPath();
+    var started = false;
+    for(var tt=T0; tt<=T1+0.001; tt+=0.25){
+      var r = rhFor(5, tt, f);
+      if(r === null){ started = false; continue; }
+      var x = M.l + (r-R0)/(R1-R0)*pw, y = M.t + (T1-tt)/(T1-T0)*ph;
+      if(!started){ ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+    }
+    ctx.stroke(); ctx.restore();
+    // 軸
+    ctx.fillStyle = muted; ctx.font = '11px -apple-system,"Segoe UI",sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for(var rr=10; rr<=100; rr+=10){
+      var xx = M.l + (rr-R0)/(R1-R0)*pw;
+      ctx.fillText(rr+'%', xx, M.t+ph+6);
+    }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for(var t2=0; t2<=40; t2+=5){
+      ctx.fillText(t2+'℃', M.l-6, M.t + (T1-t2)/(T1-T0)*ph);
+    }
+    // 現在地
+    var cx = M.l + (state.rh-R0)/(R1-R0)*pw, cy = M.t + (T1-state.t)/(T1-T0)*ph;
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI*2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#1b2127'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI*2); ctx.fillStyle = '#1b2127'; ctx.fill();
+  }
+  function pickFromMap(e){
+    var rect = cv.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var g = mapGeom(), pw = g.pw/dpr, ph = g.ph/dpr;
+    var x = (e.clientX - rect.left) * (g.W/dpr) / rect.width;
+    var y = (e.clientY - rect.top) * (g.H/dpr) / rect.height;
+    var rh = R0 + (x - M.l)/pw*(R1-R0), t = T1 - (y - M.t)/ph*(T1-T0);
+    state.rh = clamp('rh', rh); state.t = clamp('t', t);
+    ['t','rh'].forEach(function(k){ inputs[k].num.value = state[k]; inputs[k].range.value = state[k]; });
+    update();
+  }
+  var dragging = false;
+  cv.addEventListener('pointerdown', function(e){ dragging = true; cv.setPointerCapture(e.pointerId); pickFromMap(e); });
+  cv.addEventListener('pointermove', function(e){ if(dragging) pickFromMap(e); });
+  ['pointerup','pointercancel'].forEach(function(ev){ cv.addEventListener(ev, function(){ dragging = false; }); });
+
+  $('legend').innerHTML = LEVELS.slice().reverse().map(function(l){
+    return '<span><i style="background:var(' + l.c + ')"></i>' + l.name + '</span>';
+  }).join('') + '<span><i class="dash"></i>Tシャツ5時間ライン</span>';
+
+  var rsz;
+  window.addEventListener('resize', function(){ clearTimeout(rsz); rsz = setTimeout(function(){ sizeCanvas(); drawMap(); }, 120); });
+  if(window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', update);
+
+  sizeCanvas();
+  update();
+
+  if('serviceWorker' in navigator && location.protocol === 'https:'){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+})();
+</script>
+</body>
+</html>
